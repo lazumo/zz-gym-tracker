@@ -1,12 +1,17 @@
 name: poll
 
+# 主驅動：自鏈式 — 每跑完一次 sleep 14 分鐘、再 API 觸發自己。
+# 備援 cron：每 6 小時，當鏈條斷掉時自動重啟。
+# 不依賴 GitHub 的 schedule cold start (新 repo 通常要 1-12 小時才會開始發 schedule)。
+
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'   # backup safety net only
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: poll
@@ -15,7 +20,8 @@ concurrency:
 jobs:
   poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +35,7 @@ jobs:
       - run: python poller.py
 
       - name: Commit data
+        id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -39,8 +46,21 @@ jobs:
           fi
           git commit -m "data: poll $(date -u +'%Y-%m-%dT%H:%MZ')"
           for i in 1 2 3 4 5; do
-            git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push && exit 0
+            if git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push; then
+              exit 0
+            fi
             echo "push race, retry $i"
             sleep $((i * 3))
           done
+          echo "push failed after 5 retries"
           exit 1
+
+      - name: Sleep 14 min, then chain next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Sleeping 14 min before chaining..."
+          sleep 840
+          echo "Dispatching next poll..."
+          gh workflow run poll.yml --repo "$GITHUB_REPOSITORY"
