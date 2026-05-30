@@ -1,8 +1,8 @@
 # zz-gym-tracker
 
 長期追蹤 [臺北市中正運動中心](https://wsjjsc.com.tw/) 健身房（與游泳池）即時人潮。
-GitHub Actions 每 15 分鐘自動 poll 一次，每週一早上 06:00 (UTC+8) 重產 heatmap。
-你不需要做任何事 — repo 本身就是資料庫，週報自動 commit 進來。
+GitHub Actions 每 ~14 分鐘自動 poll 一次（self-chaining workflow），每天早上 06:00 (UTC+8) 重產 heatmap。
+你不需要做任何事 — repo 本身就是資料庫，圖表自動 commit 進來。
 
 ## 最新 heatmap
 
@@ -20,8 +20,8 @@ GitHub Actions 每 15 分鐘自動 poll 一次，每週一早上 06:00 (UTC+8) �
 |---|---|
 | `poller.py` | 抓首頁 HTML、regex 解析、寫入 SQLite + CSV |
 | `report.py` | 由 CSV 計算 weekday×hour 平均使用率，產 PNG + summary.md |
-| `.github/workflows/poll.yml` | 每 15 分鐘 cron poll |
-| `.github/workflows/report.yml` | 每週日 22:00 UTC (= 週一 06:00 Taipei) cron 產報告 |
+| `.github/workflows/poll.yml` | 每 ~14 分鐘 self-chain poll（每跑完 sleep 14m 再 API 觸發自己；6h cron 為安全網） |
+| `.github/workflows/report.yml` | 每天 22:00 UTC (= 06:00 Taipei) cron 產報告 |
 | `data/occupancy.db` | SQLite raw 資料（單表 `readings`） |
 | `data/occupancy.csv` | 一樣的資料但 git diff 看得懂 |
 | `reports/heatmap-latest.png` | 最新一張 heatmap |

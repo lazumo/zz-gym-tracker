@@ -1,9 +1,9 @@
-name: weekly-report
+name: report
 
 on:
   schedule:
-    # Monday 06:00 Asia/Taipei = Sunday 22:00 UTC
-    - cron: '0 22 * * 0'
+    # Daily 06:00 Asia/Taipei = 22:00 UTC (previous day)
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:
