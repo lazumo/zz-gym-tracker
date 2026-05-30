@@ -55,6 +55,32 @@ jobs:
           echo "push failed after 5 retries"
           exit 1
 
+      - name: Regenerate today's heatmap if missing
+        if: always()
+        run: |
+          TODAY=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          if [ -f "reports/heatmap-$TODAY.png" ]; then
+            echo "today's heatmap ($TODAY) already exists, skipping"
+            exit 0
+          fi
+          echo "first poll of $TODAY Taipei, regenerating heatmap"
+          python report.py
+          git add reports/
+          if git diff --staged --quiet; then
+            echo "no change"
+            exit 0
+          fi
+          git commit -m "report: daily $TODAY"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push; then
+              exit 0
+            fi
+            echo "push race, retry $i"
+            sleep $((i * 3))
+          done
+          echo "report push failed; will retry on next poll"
+          exit 0
+
       - name: Sleep 14 min, then chain next run
         if: always()
         env:
