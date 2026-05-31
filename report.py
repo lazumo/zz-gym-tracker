@@ -33,13 +33,18 @@ def main() -> int:
 
     df["pct"] = df["gym_count"] / df["gym_capacity"] * 100
 
-    pivot = (
+    pct_pivot = (
         df.pivot_table(index="weekday", columns="hour", values="pct", aggfunc="mean")
         .reindex(index=range(7), columns=range(24))
     )
+    count_pivot = (
+        df.pivot_table(index="weekday", columns="hour", values="gym_count", aggfunc="mean")
+        .reindex(index=range(7), columns=range(24))
+    )
+    capacity = int(df["gym_capacity"].mode().iat[0])
 
     fig, ax = plt.subplots(figsize=(13, 4.8))
-    im = ax.imshow(pivot, aspect="auto", cmap="RdYlGn_r", vmin=0, vmax=100)
+    im = ax.imshow(pct_pivot, aspect="auto", cmap="RdYlGn_r", vmin=0, vmax=100)
 
     ax.set_xticks(range(24))
     ax.set_xticklabels([f"{h:02d}" for h in range(24)])
@@ -51,17 +56,19 @@ def main() -> int:
     span = f"{df['ts_local'].min()[:10]} -> {df['ts_local'].max()[:10]}"
     n_readings = len(df)
     ax.set_title(
-        f"Zhongzheng Gym Avg Occupancy %   |   {span}   |   n={n_readings}"
+        f"Zhongzheng Gym Avg Occupancy   |   capacity={capacity}   |   {span}   |   n={n_readings}"
     )
 
     for i in range(7):
         for j in range(24):
-            v = pivot.iloc[i, j]
+            v = pct_pivot.iloc[i, j]
+            c = count_pivot.iloc[i, j]
             if pd.notna(v):
                 ax.text(
-                    j, i, f"{v:.0f}",
+                    j, i, f"{c:.0f}\n{v:.0f}%",
                     ha="center", va="center",
-                    fontsize=7,
+                    fontsize=6.5,
+                    linespacing=0.9,
                     color="black" if v < 55 else "white",
                 )
 
@@ -74,9 +81,12 @@ def main() -> int:
     fig.savefig(REPORT_DIR / f"heatmap-{today}.png", dpi=140)
     plt.close(fig)
 
-    flat = pivot.stack().reset_index()
+    flat = pct_pivot.stack().reset_index()
     flat.columns = ["weekday", "hour", "pct"]
     flat = flat.dropna(subset=["pct"])
+    flat["count"] = flat.apply(
+        lambda r: count_pivot.loc[r["weekday"], r["hour"]], axis=1
+    )
     flat["slot"] = (
         flat["weekday"].map(dict(enumerate(WEEKDAY_LABELS)))
         + " "
@@ -88,26 +98,26 @@ def main() -> int:
     md = [
         "# 中正運動中心健身房 報告",
         "",
-        f"資料區間: `{span}`, 共 **{n_readings}** 筆觀測",
+        f"資料區間: `{span}`, 共 **{n_readings}** 筆觀測，capacity = **{capacity}** 人",
         "",
         "![heatmap](heatmap-latest.png)",
         "",
         "## 最空的時段 (top 10)",
         "",
-        "| 時段 | 平均使用率 |",
-        "|---|---|",
+        "| 時段 | 平均人數 | 使用率 |",
+        "|---|---:|---:|",
     ]
     for _, r in flat.head(10).iterrows():
-        md.append(f"| {r['slot']} | {r['pct']:.0f}% |")
+        md.append(f"| {r['slot']} | {r['count']:.0f} 人 | {r['pct']:.0f}% |")
     md += [
         "",
         "## 最擠的時段 (top 10)",
         "",
-        "| 時段 | 平均使用率 |",
-        "|---|---|",
+        "| 時段 | 平均人數 | 使用率 |",
+        "|---|---:|---:|",
     ]
     for _, r in flat.tail(10).iloc[::-1].iterrows():
-        md.append(f"| {r['slot']} | {r['pct']:.0f}% |")
+        md.append(f"| {r['slot']} | {r['count']:.0f} 人 | {r['pct']:.0f}% |")
 
     (REPORT_DIR / "summary.md").write_text("\n".join(md), encoding="utf-8")
 
