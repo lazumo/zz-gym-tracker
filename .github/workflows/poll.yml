@@ -55,15 +55,19 @@ jobs:
           echo "push failed after 5 retries"
           exit 1
 
-      - name: Regenerate today's heatmap if missing
+      - name: Regenerate heatmap if last commit > 1h ago
         if: always()
         run: |
-          TODAY=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          if [ -f "reports/heatmap-$TODAY.png" ]; then
-            echo "today's heatmap ($TODAY) already exists, skipping"
+          # checkout always resets mtime, so use last-commit time of the file
+          LAST=$(git log -1 --format=%at -- reports/heatmap-latest.png 2>/dev/null || echo 0)
+          NOW=$(date +%s)
+          AGE=$((NOW - LAST))
+          if [ "$LAST" -gt 0 ] && [ "$AGE" -lt 3600 ]; then
+            echo "heatmap committed ${AGE}s ago (< 1h), skipping regen"
             exit 0
           fi
-          echo "first poll of $TODAY Taipei, regenerating heatmap"
+          TODAY=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          echo "heatmap is ${AGE}s old, regenerating"
           python report.py
           git add reports/
           if git diff --staged --quiet; then
